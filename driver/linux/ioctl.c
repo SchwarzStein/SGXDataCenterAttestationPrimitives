@@ -710,6 +710,73 @@ static long sgx_ioc_enclave_provision(struct sgx_encl *encl, void __user *arg)
 	return 0;
 }
 
+long sgx_ioc_enclave_mlock_page(struct sgx_enclave *encl, void __user *arg)
+{
+	struct sgx_enclave_mlock_page args;
+	struct sgx_encl_page *encl_page;
+	struct sgx_epc_page *epc_page;
+	struct vm_area_struct *vma=0;
+	unsigned long start_addr=0,end=0;
+	long processed_pages=0;
+
+	if (!test_bit(SGX_ENCL_CREATED, &encl->flags) ||
+	    test_bit(SGX_ENCL_INITIALIZED, &encl->flags))
+		return -EINVAL;
+
+	if (copy_from_user(&args, arg, sizeof(args))) {
+		return -EFAULT;
+	}
+
+	if (!IS_ALIGNED(add_arg.addr, PAGE_SIZE) ||
+		return -EINVAL;
+
+	if ((args.addr >= (encl->base + encl->size)) ||
+		(args.addr < encl->base))
+		return -EINVAL;
+
+	if ((args.addr + (args.count * PAGE_SIZE)) >= 
+		(encl->size + args.addr))
+		return -EINVAL;
+
+	if (args.flags > 2)
+		return -EINVAL;
+
+	end = args.addr + (args.count * PAGE_SIZE);
+	for (start_addr=args.addr; start_addr < end; start_addr+= PAGE_SIZE) {
+		vma = find_vma(current->mm, addr);
+		if(!vma)
+			break;
+
+		encl_page = sgx_encl_reserve_page(encl, start_addr,vma->flags)
+		if(!encl_page)
+			break;
+
+		epc_page = encl_page->epc_page;
+		if (args.flags==0) { /*unlock a page*/
+			if (epc_page->flags & SGX_EPC_PAGE_VM_LOCKED) {
+				epc_page->flags &= ~SGX_EPC_PAGE_VM_LOCKED;
+				encl->locked_pages--;/*protected by mutex*/
+			}
+			processsed_pages++;
+		} else if (args.flags==1) {
+			if (epc_page->flags & ~SGX_EPC_PAGE_VM_LOCKED) {
+				epc_page->flags |= SGX_EPC_PAGE_VM_LOCKED;
+				encl->locked_pages++;/*protected by mutex*/
+			}
+			processsed_pages++;
+		} else if ( args.flags==2) {
+			if(epc->flags & SGX_EPC_PAGE_VM_LOCKED)	
+				processed_pages = 1;
+			else 
+				process_pages = 0;
+			mutex_unlock(&encl->lock);
+			break;
+		}
+		mutex_unlock(&encl->lock);
+	} 
+	return processed_pages;
+}
+
 long sgx_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 {
 	struct sgx_encl *encl = filep->private_data;
@@ -730,6 +797,9 @@ long sgx_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		break;
 	case SGX_IOC_ENCLAVE_PROVISION:
 		ret = sgx_ioc_enclave_provision(encl, (void __user *)arg);
+		break;
+	case SGX_IOC_ENCLAVE_MLOCK_PAGE:
+		ret = sgx_ioc_enclave_mlock_page(encl, (void __user *)arg);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;

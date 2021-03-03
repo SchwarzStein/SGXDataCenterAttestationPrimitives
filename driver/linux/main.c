@@ -363,6 +363,9 @@ static void sgx_reclaim_pages(void)
 		epc_page = chunk[i];
 		encl_page = epc_page->owner;
 
+		if (epc_page->flags & SGX_EPC_PAGE_VM_LOCKED)
+			goto skip;
+
 		if (!sgx_reclaimer_age(epc_page))
 			goto skip;
 
@@ -662,7 +665,10 @@ void sgx_free_epc_page(struct sgx_epc_page *page)
 	int ret;
 
 	WARN_ON_ONCE(page->flags & SGX_EPC_PAGE_RECLAIMER_TRACKED);
-
+	if (page && (page->flags & SGX_EPC_PAGE_VM_LOCKED)) {
+		page->flags |= ~SGX_EPC_PAGE_VM_LOCKED;
+		page->owner->encl->locked_pages--;
+	}
 	ret = __eremove(sgx_get_epc_virt_addr(page));
 	if (WARN_ONCE(ret, "EREMOVE returned %d (0x%x)", ret, ret))
 		return;

@@ -27,6 +27,8 @@ enum sgx_page_flags {
 	_IOW(SGX_MAGIC, 0x02, struct sgx_enclave_init)
 #define SGX_IOC_ENCLAVE_PROVISION \
 	_IOW(SGX_MAGIC, 0x03, struct sgx_enclave_provision)
+#define SGX_IOC_ENCLAVE_MLOCK_PAGE \
+	_IOW(SGX_MAGIC, 0x04, struct sgx_enclave_mlock_page)
 
 /**
  * struct sgx_enclave_create - parameter structure for the
@@ -54,6 +56,19 @@ struct sgx_enclave_add_pages {
 	__u64 secinfo;
 	__u64 flags;
 	__u64 count;
+};
+
+/**
+ * struct sgx_enclave_lock_page - parameter structure for the
+ *                                %SGX_IOC_ENCLAVE_MLOCK_PAGE ioctl
+ * @addr:	start address for the page to lock or unlock 
+ * @count:	number of pages to lock starting from address addr
+ * @flags:	page control flags
+ */
+struct sgx_enclave_mlock_page {
+	__u64 addr;
+	__u64 count;
+	__u64 flags;
 };
 
 /**

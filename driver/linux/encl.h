@@ -61,6 +61,7 @@ struct sgx_encl {
 	unsigned long flags;
 	unsigned int page_cnt;
 	unsigned int secs_child_cnt;
+	unsigned int locked_pages;
 	struct mutex lock;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
 	struct xarray page_array;

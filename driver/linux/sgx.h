@@ -21,6 +21,7 @@
 
 /* Pages, which are being tracked by the page reclaimer. */
 #define SGX_EPC_PAGE_RECLAIMER_TRACKED	BIT(0)
+#define SGX_EPC_PAGE_VM_LOCKED			BIT(1)
 
 struct sgx_epc_page {
 	unsigned int section;
