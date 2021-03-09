@@ -437,7 +437,7 @@ err_out_free:
  */
 static long sgx_ioc_enclave_add_pages(struct sgx_encl *encl, void __user *arg)
 {
-	struct sgx_enclave_add_pages add_arg;
+	struct sgx_enclave_add_pages args;
 	struct sgx_secinfo secinfo;
 	unsigned long c;
 	int ret;
@@ -446,27 +446,27 @@ static long sgx_ioc_enclave_add_pages(struct sgx_encl *encl, void __user *arg)
 	    test_bit(SGX_ENCL_INITIALIZED, &encl->flags))
 		return -EINVAL;
 
-	if (copy_from_user(&add_arg, arg, sizeof(add_arg)))
+	if (copy_from_user(&args, arg, sizeof(args)))
 		return -EFAULT;
 
-	if (!IS_ALIGNED(add_arg.offset, PAGE_SIZE) ||
-	    !IS_ALIGNED(add_arg.src, PAGE_SIZE))
+	if (!IS_ALIGNED(args.offset, PAGE_SIZE) ||
+	    !IS_ALIGNED(args.src, PAGE_SIZE))
 		return -EINVAL;
 
-	if (!add_arg.length || add_arg.length & (PAGE_SIZE - 1))
+	if (!args.length || args.length & (PAGE_SIZE - 1))
 		return -EINVAL;
 
-	if (add_arg.offset + add_arg.length - PAGE_SIZE >= encl->size)
+	if (args.offset + args.length - PAGE_SIZE >= encl->size)
 		return -EINVAL;
 
-	if (copy_from_user(&secinfo, (void __user *)add_arg.secinfo,
+	if (copy_from_user(&secinfo, (void __user *)args.secinfo,
 			   sizeof(secinfo)))
 		return -EFAULT;
 
 	if (sgx_validate_secinfo(&secinfo))
 		return -EINVAL;
 
-	for (c = 0 ; c < add_arg.length; c += PAGE_SIZE) {
+	for (c = 0 ; c < args.length; c += PAGE_SIZE) {
 		if (signal_pending(current)) {
 			if (!c)
 				ret = -ERESTARTSYS;
@@ -477,15 +477,15 @@ static long sgx_ioc_enclave_add_pages(struct sgx_encl *encl, void __user *arg)
 		if (need_resched())
 			cond_resched();
 
-		ret = sgx_encl_add_page(encl, add_arg.src + c, add_arg.offset + c,
-					&secinfo, add_arg.flags);
+		ret = sgx_encl_add_page(encl, args.src + c, args.offset + c,
+					&secinfo, args.flags);
 		if (ret)
 			break;
 	}
 
-	add_arg.count = c;
+	args.count = c;
 
-	if (copy_to_user(arg, &add_arg, sizeof(add_arg)))
+	if (copy_to_user(arg, &args, sizeof(args)))
 		return -EFAULT;
 
 	return ret;
@@ -709,13 +709,13 @@ static long sgx_ioc_enclave_provision(struct sgx_encl *encl, void __user *arg)
 	fput(file);
 	return 0;
 }
-
-long sgx_ioc_enclave_mlock_page(struct sgx_enclave *encl, void __user *arg)
+extern struct sgx_encl_page *sgx_encl_reserve_page(struct sgx_encl *encl, unsigned long addr, unsigned long vm_flags);
+long sgx_ioc_enclave_mlock_page(struct sgx_encl *encl, void __user *arg)
 {
 	struct sgx_enclave_mlock_page args;
-	struct sgx_encl_page *encl_page;
-	struct sgx_epc_page *epc_page;
-	struct vm_area_struct *vma=0;
+    struct vm_area_struct *vma;
+    struct sgx_encl_page *encl_page;
+    struct sgx_epc_page *epc_page;
 	unsigned long start_addr=0,end=0;
 	long processed_pages=0;
 
@@ -723,11 +723,11 @@ long sgx_ioc_enclave_mlock_page(struct sgx_enclave *encl, void __user *arg)
 	    test_bit(SGX_ENCL_INITIALIZED, &encl->flags))
 		return -EINVAL;
 
-	if (copy_from_user(&args, arg, sizeof(args))) {
+	if (copy_from_user(&args, arg, sizeof(args)))
 		return -EFAULT;
-	}
+	
 
-	if (!IS_ALIGNED(add_arg.addr, PAGE_SIZE) ||
+	if (!IS_ALIGNED(args.addr, PAGE_SIZE) )
 		return -EINVAL;
 
 	if ((args.addr >= (encl->base + encl->size)) ||
@@ -743,11 +743,10 @@ long sgx_ioc_enclave_mlock_page(struct sgx_enclave *encl, void __user *arg)
 
 	end = args.addr + (args.count * PAGE_SIZE);
 	for (start_addr=args.addr; start_addr < end; start_addr+= PAGE_SIZE) {
-		vma = find_vma(current->mm, addr);
-		if(!vma)
-			break;
+		vma = find_vma(current->mm, args.addr);
+		if(!vma) break;
 
-		encl_page = sgx_encl_reserve_page(encl, start_addr,vma->flags)
+		encl_page = sgx_encl_reserve_page(encl, start_addr,vma->vm_flags);
 		if(!encl_page)
 			break;
 
@@ -757,18 +756,18 @@ long sgx_ioc_enclave_mlock_page(struct sgx_enclave *encl, void __user *arg)
 				epc_page->flags &= ~SGX_EPC_PAGE_VM_LOCKED;
 				encl->locked_pages--;/*protected by mutex*/
 			}
-			processsed_pages++;
+			processed_pages++;
 		} else if (args.flags==1) {
 			if (epc_page->flags & ~SGX_EPC_PAGE_VM_LOCKED) {
 				epc_page->flags |= SGX_EPC_PAGE_VM_LOCKED;
 				encl->locked_pages++;/*protected by mutex*/
 			}
-			processsed_pages++;
+			processed_pages++;
 		} else if ( args.flags==2) {
-			if(epc->flags & SGX_EPC_PAGE_VM_LOCKED)	
+			if(epc_page->flags & SGX_EPC_PAGE_VM_LOCKED)	
 				processed_pages = 1;
 			else 
-				process_pages = 0;
+				processed_pages = 0;
 			mutex_unlock(&encl->lock);
 			break;
 		}

@@ -368,7 +368,7 @@ static int sgx_encl_debug_write(struct sgx_encl *encl, struct sgx_encl_page *pag
 /*
  * Load an enclave page to EPC if required, and take encl->lock.
  */
-static struct sgx_encl_page *sgx_encl_reserve_page(struct sgx_encl *encl,
+struct sgx_encl_page *sgx_encl_reserve_page(struct sgx_encl *encl,
 						   unsigned long addr,
 						   unsigned long vm_flags)
 {
@@ -448,11 +448,28 @@ out:
 	return ret < 0 ? ret : i;
 }
 
+bool 
+lock_safe(struct vm_area_struct *area, unsigned long addr)
+{
+    return true;
+}
+bool unlock_safe(struct vm_area_struct *area, unsigned long addr)
+{
+    return true;
+}
+bool 
+operation_allowed(struct vm_area_struct *Area, unsigned long addr, int flags) 
+{
+    return true;
+}
 const struct vm_operations_struct sgx_vm_ops = {
 	.fault = sgx_vma_fault,
 //	.mprotect = sgx_vma_mprotect, //not ported from inkernel
 	.open = sgx_vma_open,
 	.access = sgx_vma_access,
+    .lock_safe = lock_safe,
+    .unlock_safe = unlock_safe,
+    .operation_allowed = operation_allowed
 };
 
 /**
